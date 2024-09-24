@@ -93,7 +93,7 @@ pub struct GetCoinbasePsbtResponse {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AckBundles {
-    #[prost(enumeration="AckBundlesEnum", tag="1")]
+    #[prost(enumeration="BundleTag", tag="1")]
     pub tag: i32,
     #[prost(uint32, repeated, tag="2")]
     pub upvotes: ::prost::alloc::vec::Vec<u32>,
@@ -190,32 +190,35 @@ pub struct GetMainChainTipResponse {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
-pub enum AckBundlesEnum {
-    RepeatPrevious = 0,
-    LeadingBy50 = 1,
-    Upvotes = 2,
+pub enum BundleTag {
+    RepeatUnspecified = 0,
+    RepeatPrevious = 1,
+    LeadingBy50 = 2,
+    Upvotes = 3,
 }
-impl AckBundlesEnum {
+impl BundleTag {
     /// String value of the enum field names used in the ProtoBuf definition.
     ///
     /// The values are not transformed in any way and thus are considered stable
     /// (if the ProtoBuf definition does not change) and safe for programmatic use.
     pub fn as_str_name(&self) -> &'static str {
         match self {
-            AckBundlesEnum::RepeatPrevious => "RepeatPrevious",
-            AckBundlesEnum::LeadingBy50 => "LeadingBy50",
-            AckBundlesEnum::Upvotes => "Upvotes",
+            BundleTag::RepeatUnspecified => "BUNDLE_TAG_REPEAT_UNSPECIFIED",
+            BundleTag::RepeatPrevious => "BUNDLE_TAG_REPEAT_PREVIOUS",
+            BundleTag::LeadingBy50 => "BUNDLE_TAG_LEADING_BY_50",
+            BundleTag::Upvotes => "BUNDLE_TAG_UPVOTES",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
     pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
         match value {
-            "RepeatPrevious" => Some(Self::RepeatPrevious),
-            "LeadingBy50" => Some(Self::LeadingBy50),
-            "Upvotes" => Some(Self::Upvotes),
+            "BUNDLE_TAG_REPEAT_UNSPECIFIED" => Some(Self::RepeatUnspecified),
+            "BUNDLE_TAG_REPEAT_PREVIOUS" => Some(Self::RepeatPrevious),
+            "BUNDLE_TAG_LEADING_BY_50" => Some(Self::LeadingBy50),
+            "BUNDLE_TAG_UPVOTES" => Some(Self::Upvotes),
             _ => None,
         }
     }
 }
-include!("validator.tonic.rs");
+include!("validator.v1.tonic.rs");
 // @@protoc_insertion_point(module)

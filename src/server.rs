@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
-use crate::gen::validator::validator_server::Validator;
-use crate::gen::validator::*;
+use crate::gen::validator::v1::validator_service_server::ValidatorService;
+use crate::gen::validator::v1::*;
 
 use bip300301_messages::{
     bitcoin::{
@@ -20,7 +20,7 @@ pub use crate::bip300::Bip300;
 use crate::types;
 
 #[tonic::async_trait]
-impl Validator for Bip300 {
+impl ValidatorService for Bip300 {
     async fn connect_block(
         &self,
         _: Request<ConnectBlockRequest>,
@@ -81,9 +81,10 @@ impl Validator for Bip300 {
         }
         if let Some(ack_bundles) = &request.ack_bundles {
             let message = match ack_bundles.tag() {
-                AckBundlesEnum::RepeatPrevious => M4AckBundles::RepeatPrevious,
-                AckBundlesEnum::LeadingBy50 => M4AckBundles::LeadingBy50,
-                AckBundlesEnum::Upvotes => {
+                BundleTag::RepeatUnspecified => panic!("unspecified bundle tag"),
+                BundleTag::RepeatPrevious => M4AckBundles::RepeatPrevious,
+                BundleTag::LeadingBy50 => M4AckBundles::LeadingBy50,
+                BundleTag::Upvotes => {
                     let mut two_bytes = false;
                     for upvote in &ack_bundles.upvotes {
                         if *upvote > u8::MAX as u32 {

@@ -1,45 +1,44 @@
 syntax = "proto3";
-package validator;
 
-service Validator {
+package validator.v1;
+
+service ValidatorService {
   rpc ConnectBlock(ConnectBlockRequest) returns (ConnectBlockResponse);
   rpc DisconnectBlock(DisconnectBlockRequest) returns (DisconnectBlockResponse);
   rpc GetCoinbasePSBT(GetCoinbasePSBTRequest) returns (GetCoinbasePSBTResponse);
   rpc GetDeposits(GetDepositsRequest) returns (GetDepositsResponse);
 
-  rpc GetSidechainProposals(GetSidechainProposalsRequest)
-      returns (GetSidechainProposalsResponse);
+  rpc GetSidechainProposals(GetSidechainProposalsRequest) returns (GetSidechainProposalsResponse);
 
   rpc GetSidechains(GetSidechainsRequest) returns (GetSidechainsResponse);
 
   rpc GetCtip(GetCtipRequest) returns (GetCtipResponse);
 
-  rpc GetMainBlockHeight(GetMainBlockHeightRequest)
-      returns (GetMainBlockHeightResponse);
+  rpc GetMainBlockHeight(GetMainBlockHeightRequest) returns (GetMainBlockHeightResponse);
 
   rpc GetMainChainTip(GetMainChainTipRequest) returns (GetMainChainTipResponse);
 
   /*
-    rpc ListSidechainProposals(ListSidechainProposalsRequest) returns
-    (ListSidechainProposalsResponse); rpc
-    ListActiveSidechains(ListActiveSidechainsRequest) returns
-    (ListActiveSidechainsResponse);
+     rpc ListSidechainProposals(ListSidechainProposalsRequest) returns
+     (ListSidechainProposalsResponse); rpc
+     ListActiveSidechains(ListActiveSidechainsRequest) returns
+     (ListActiveSidechainsResponse);
 
-    rpc ListProposedWithdrawalBundleIds(ListProposedWithdrawalBundleIdsRequest)
-    returns (ListProposedWithdrawalBundleIdsResponse); rpc
-    ListFailedWithdrawalBundleIds(ListFailedWithdrawalBundleIdsRequest) returns
-    (ListFailedWithdrawalBundleIdsResponse); rpc
-    ListSuccededWithdrawalBundleIds(ListSuccededWithdrawalBundleIdsRequest)
-    returns (ListSuccededWithdrawalBundleIdsResponse);
+     rpc ListProposedWithdrawalBundleIds(ListProposedWithdrawalBundleIdsRequest)
+     returns (ListProposedWithdrawalBundleIdsResponse); rpc
+     ListFailedWithdrawalBundleIds(ListFailedWithdrawalBundleIdsRequest) returns
+     (ListFailedWithdrawalBundleIdsResponse); rpc
+     ListSuccededWithdrawalBundleIds(ListSuccededWithdrawalBundleIdsRequest)
+     returns (ListSuccededWithdrawalBundleIdsResponse);
 
-    rpc GetWithdrawalBundle(GetWithdrawalBundleRequest) returns
-    (GetWithdrawalBundleResponse);
+     rpc GetWithdrawalBundle(GetWithdrawalBundleRequest) returns
+     (GetWithdrawalBundleResponse);
 
-    rpc ListDeposits(ListDepositsRequest) returns (ListDepositsResponse);
+     rpc ListDeposits(ListDepositsRequest) returns (ListDepositsResponse);
 
-    rpc IsBlockValid(IsBlockValidRequest) returns (IsBlockValidResponse);
-    rpc IsTransactionValid(IsTransactionValidRequest) returns
-    (IsTransactionValidResponse);
+     rpc IsBlockValid(IsBlockValidRequest) returns (IsBlockValidResponse);
+     rpc IsTransactionValid(IsTransactionValidRequest) returns
+     (IsTransactionValidResponse);
   */
 }
 
@@ -58,7 +57,9 @@ message SidechainProposal {
 }
 
 message GetSidechainsRequest {}
-message GetSidechainsResponse { repeated Sidechain sidechains = 1; }
+message GetSidechainsResponse {
+  repeated Sidechain sidechains = 1;
+}
 
 message Sidechain {
   uint32 sidechain_number = 1;
@@ -74,7 +75,9 @@ message ConnectBlockRequest {
 }
 message ConnectBlockResponse {}
 
-message DisconnectBlockRequest { bytes block = 1; }
+message DisconnectBlockRequest {
+  bytes block = 1;
+}
 message DisconnectBlockResponse {}
 
 message GetCoinbasePSBTRequest {
@@ -82,18 +85,21 @@ message GetCoinbasePSBTRequest {
   repeated AckSidechain ack_sidechains = 2;
   repeated ProposeBundle propose_bundles = 3;
   AckBundles ack_bundles = 4;
-};
-message GetCoinbasePSBTResponse { bytes psbt = 1; };
+}
+message GetCoinbasePSBTResponse {
+  bytes psbt = 1;
+}
 
 message AckBundles {
-  AckBundlesEnum tag = 1;
+  BundleTag tag = 1;
   repeated uint32 upvotes = 2;
 }
 
-enum AckBundlesEnum {
-  RepeatPrevious = 0;
-  LeadingBy50 = 1;
-  Upvotes = 2;
+enum BundleTag {
+  BUNDLE_TAG_REPEAT_UNSPECIFIED = 0;
+  BUNDLE_TAG_REPEAT_PREVIOUS = 1;
+  BUNDLE_TAG_LEADING_BY_50 = 2;
+  BUNDLE_TAG_UPVOTES = 3;
 }
 
 message AckSidechain {
@@ -111,9 +117,13 @@ message ProposeBundle {
   bytes bundle_txid = 2;
 }
 
-message GetDepositsRequest { uint32 sidechain_number = 1; }
+message GetDepositsRequest {
+  uint32 sidechain_number = 1;
+}
 
-message GetDepositsResponse { repeated Deposit deposits = 1; }
+message GetDepositsResponse {
+  repeated Deposit deposits = 1;
+}
 
 message Deposit {
   bytes address = 1;
@@ -121,9 +131,13 @@ message Deposit {
   uint64 sequence_number = 3;
 }
 
-message GetCtipRequest { uint32 sidechain_number = 1; }
+message GetCtipRequest {
+  uint32 sidechain_number = 1;
+}
 
-message GetCtipResponse { optional Ctip ctip = 1; }
+message GetCtipResponse {
+  optional Ctip ctip = 1;
+}
 
 message Ctip {
   bytes txid = 1;
@@ -134,8 +148,12 @@ message Ctip {
 
 message GetMainBlockHeightRequest {}
 
-message GetMainBlockHeightResponse { uint32 height = 1; }
+message GetMainBlockHeightResponse {
+  uint32 height = 1;
+}
 
 message GetMainChainTipRequest {}
 
-message GetMainChainTipResponse { bytes block_hash = 1; }
+message GetMainChainTipResponse {
+  bytes block_hash = 1;
+}

@@ -1,14 +1,14 @@
 // @generated
 /// Generated client implementations.
-pub mod validator_client {
+pub mod validator_service_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
     #[derive(Debug, Clone)]
-    pub struct ValidatorClient<T> {
+    pub struct ValidatorServiceClient<T> {
         inner: tonic::client::Grpc<T>,
     }
-    impl ValidatorClient<tonic::transport::Channel> {
+    impl ValidatorServiceClient<tonic::transport::Channel> {
         /// Attempt to create a new client by connecting to a given endpoint.
         pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
         where
@@ -19,7 +19,7 @@ pub mod validator_client {
             Ok(Self::new(conn))
         }
     }
-    impl<T> ValidatorClient<T>
+    impl<T> ValidatorServiceClient<T>
     where
         T: tonic::client::GrpcService<tonic::body::BoxBody>,
         T::Error: Into<StdError>,
@@ -37,7 +37,7 @@ pub mod validator_client {
         pub fn with_interceptor<F>(
             inner: T,
             interceptor: F,
-        ) -> ValidatorClient<InterceptedService<T, F>>
+        ) -> ValidatorServiceClient<InterceptedService<T, F>>
         where
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
@@ -51,7 +51,7 @@ pub mod validator_client {
                 http::Request<tonic::body::BoxBody>,
             >>::Error: Into<StdError> + Send + Sync,
         {
-            ValidatorClient::new(InterceptedService::new(inner, interceptor))
+            ValidatorServiceClient::new(InterceptedService::new(inner, interceptor))
         }
         /// Compress requests with the given encoding.
         ///
@@ -102,11 +102,13 @@ pub mod validator_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/validator.Validator/ConnectBlock",
+                "/validator.v1.ValidatorService/ConnectBlock",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("validator.Validator", "ConnectBlock"));
+                .insert(
+                    GrpcMethod::new("validator.v1.ValidatorService", "ConnectBlock"),
+                );
             self.inner.unary(req, path, codec).await
         }
         pub async fn disconnect_block(
@@ -127,11 +129,13 @@ pub mod validator_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/validator.Validator/DisconnectBlock",
+                "/validator.v1.ValidatorService/DisconnectBlock",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("validator.Validator", "DisconnectBlock"));
+                .insert(
+                    GrpcMethod::new("validator.v1.ValidatorService", "DisconnectBlock"),
+                );
             self.inner.unary(req, path, codec).await
         }
         pub async fn get_coinbase_psbt(
@@ -152,11 +156,13 @@ pub mod validator_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/validator.Validator/GetCoinbasePSBT",
+                "/validator.v1.ValidatorService/GetCoinbasePSBT",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("validator.Validator", "GetCoinbasePSBT"));
+                .insert(
+                    GrpcMethod::new("validator.v1.ValidatorService", "GetCoinbasePSBT"),
+                );
             self.inner.unary(req, path, codec).await
         }
         pub async fn get_deposits(
@@ -177,11 +183,11 @@ pub mod validator_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/validator.Validator/GetDeposits",
+                "/validator.v1.ValidatorService/GetDeposits",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("validator.Validator", "GetDeposits"));
+                .insert(GrpcMethod::new("validator.v1.ValidatorService", "GetDeposits"));
             self.inner.unary(req, path, codec).await
         }
         pub async fn get_sidechain_proposals(
@@ -202,11 +208,16 @@ pub mod validator_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/validator.Validator/GetSidechainProposals",
+                "/validator.v1.ValidatorService/GetSidechainProposals",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("validator.Validator", "GetSidechainProposals"));
+                .insert(
+                    GrpcMethod::new(
+                        "validator.v1.ValidatorService",
+                        "GetSidechainProposals",
+                    ),
+                );
             self.inner.unary(req, path, codec).await
         }
         pub async fn get_sidechains(
@@ -227,11 +238,13 @@ pub mod validator_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/validator.Validator/GetSidechains",
+                "/validator.v1.ValidatorService/GetSidechains",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("validator.Validator", "GetSidechains"));
+                .insert(
+                    GrpcMethod::new("validator.v1.ValidatorService", "GetSidechains"),
+                );
             self.inner.unary(req, path, codec).await
         }
         pub async fn get_ctip(
@@ -252,11 +265,11 @@ pub mod validator_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/validator.Validator/GetCtip",
+                "/validator.v1.ValidatorService/GetCtip",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("validator.Validator", "GetCtip"));
+                .insert(GrpcMethod::new("validator.v1.ValidatorService", "GetCtip"));
             self.inner.unary(req, path, codec).await
         }
         pub async fn get_main_block_height(
@@ -277,11 +290,16 @@ pub mod validator_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/validator.Validator/GetMainBlockHeight",
+                "/validator.v1.ValidatorService/GetMainBlockHeight",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("validator.Validator", "GetMainBlockHeight"));
+                .insert(
+                    GrpcMethod::new(
+                        "validator.v1.ValidatorService",
+                        "GetMainBlockHeight",
+                    ),
+                );
             self.inner.unary(req, path, codec).await
         }
         pub async fn get_main_chain_tip(
@@ -302,22 +320,24 @@ pub mod validator_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/validator.Validator/GetMainChainTip",
+                "/validator.v1.ValidatorService/GetMainChainTip",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("validator.Validator", "GetMainChainTip"));
+                .insert(
+                    GrpcMethod::new("validator.v1.ValidatorService", "GetMainChainTip"),
+                );
             self.inner.unary(req, path, codec).await
         }
     }
 }
 /// Generated server implementations.
-pub mod validator_server {
+pub mod validator_service_server {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     use tonic::codegen::*;
-    /// Generated trait containing gRPC methods that should be implemented for use with ValidatorServer.
+    /// Generated trait containing gRPC methods that should be implemented for use with ValidatorServiceServer.
     #[async_trait]
-    pub trait Validator: Send + Sync + 'static {
+    pub trait ValidatorService: Send + Sync + 'static {
         async fn connect_block(
             &self,
             request: tonic::Request<super::ConnectBlockRequest>,
@@ -380,14 +400,14 @@ pub mod validator_server {
         >;
     }
     #[derive(Debug)]
-    pub struct ValidatorServer<T: Validator> {
+    pub struct ValidatorServiceServer<T: ValidatorService> {
         inner: Arc<T>,
         accept_compression_encodings: EnabledCompressionEncodings,
         send_compression_encodings: EnabledCompressionEncodings,
         max_decoding_message_size: Option<usize>,
         max_encoding_message_size: Option<usize>,
     }
-    impl<T: Validator> ValidatorServer<T> {
+    impl<T: ValidatorService> ValidatorServiceServer<T> {
         pub fn new(inner: T) -> Self {
             Self::from_arc(Arc::new(inner))
         }
@@ -438,9 +458,9 @@ pub mod validator_server {
             self
         }
     }
-    impl<T, B> tonic::codegen::Service<http::Request<B>> for ValidatorServer<T>
+    impl<T, B> tonic::codegen::Service<http::Request<B>> for ValidatorServiceServer<T>
     where
-        T: Validator,
+        T: ValidatorService,
         B: Body + Send + 'static,
         B::Error: Into<StdError> + Send + 'static,
     {
@@ -455,11 +475,11 @@ pub mod validator_server {
         }
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             match req.uri().path() {
-                "/validator.Validator/ConnectBlock" => {
+                "/validator.v1.ValidatorService/ConnectBlock" => {
                     #[allow(non_camel_case_types)]
-                    struct ConnectBlockSvc<T: Validator>(pub Arc<T>);
+                    struct ConnectBlockSvc<T: ValidatorService>(pub Arc<T>);
                     impl<
-                        T: Validator,
+                        T: ValidatorService,
                     > tonic::server::UnaryService<super::ConnectBlockRequest>
                     for ConnectBlockSvc<T> {
                         type Response = super::ConnectBlockResponse;
@@ -473,7 +493,8 @@ pub mod validator_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as Validator>::connect_block(&inner, request).await
+                                <T as ValidatorService>::connect_block(&inner, request)
+                                    .await
                             };
                             Box::pin(fut)
                         }
@@ -500,11 +521,11 @@ pub mod validator_server {
                     };
                     Box::pin(fut)
                 }
-                "/validator.Validator/DisconnectBlock" => {
+                "/validator.v1.ValidatorService/DisconnectBlock" => {
                     #[allow(non_camel_case_types)]
-                    struct DisconnectBlockSvc<T: Validator>(pub Arc<T>);
+                    struct DisconnectBlockSvc<T: ValidatorService>(pub Arc<T>);
                     impl<
-                        T: Validator,
+                        T: ValidatorService,
                     > tonic::server::UnaryService<super::DisconnectBlockRequest>
                     for DisconnectBlockSvc<T> {
                         type Response = super::DisconnectBlockResponse;
@@ -518,7 +539,8 @@ pub mod validator_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as Validator>::disconnect_block(&inner, request).await
+                                <T as ValidatorService>::disconnect_block(&inner, request)
+                                    .await
                             };
                             Box::pin(fut)
                         }
@@ -545,11 +567,11 @@ pub mod validator_server {
                     };
                     Box::pin(fut)
                 }
-                "/validator.Validator/GetCoinbasePSBT" => {
+                "/validator.v1.ValidatorService/GetCoinbasePSBT" => {
                     #[allow(non_camel_case_types)]
-                    struct GetCoinbasePSBTSvc<T: Validator>(pub Arc<T>);
+                    struct GetCoinbasePSBTSvc<T: ValidatorService>(pub Arc<T>);
                     impl<
-                        T: Validator,
+                        T: ValidatorService,
                     > tonic::server::UnaryService<super::GetCoinbasePsbtRequest>
                     for GetCoinbasePSBTSvc<T> {
                         type Response = super::GetCoinbasePsbtResponse;
@@ -563,7 +585,8 @@ pub mod validator_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as Validator>::get_coinbase_psbt(&inner, request).await
+                                <T as ValidatorService>::get_coinbase_psbt(&inner, request)
+                                    .await
                             };
                             Box::pin(fut)
                         }
@@ -590,11 +613,11 @@ pub mod validator_server {
                     };
                     Box::pin(fut)
                 }
-                "/validator.Validator/GetDeposits" => {
+                "/validator.v1.ValidatorService/GetDeposits" => {
                     #[allow(non_camel_case_types)]
-                    struct GetDepositsSvc<T: Validator>(pub Arc<T>);
+                    struct GetDepositsSvc<T: ValidatorService>(pub Arc<T>);
                     impl<
-                        T: Validator,
+                        T: ValidatorService,
                     > tonic::server::UnaryService<super::GetDepositsRequest>
                     for GetDepositsSvc<T> {
                         type Response = super::GetDepositsResponse;
@@ -608,7 +631,7 @@ pub mod validator_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as Validator>::get_deposits(&inner, request).await
+                                <T as ValidatorService>::get_deposits(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -635,11 +658,11 @@ pub mod validator_server {
                     };
                     Box::pin(fut)
                 }
-                "/validator.Validator/GetSidechainProposals" => {
+                "/validator.v1.ValidatorService/GetSidechainProposals" => {
                     #[allow(non_camel_case_types)]
-                    struct GetSidechainProposalsSvc<T: Validator>(pub Arc<T>);
+                    struct GetSidechainProposalsSvc<T: ValidatorService>(pub Arc<T>);
                     impl<
-                        T: Validator,
+                        T: ValidatorService,
                     > tonic::server::UnaryService<super::GetSidechainProposalsRequest>
                     for GetSidechainProposalsSvc<T> {
                         type Response = super::GetSidechainProposalsResponse;
@@ -653,7 +676,10 @@ pub mod validator_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as Validator>::get_sidechain_proposals(&inner, request)
+                                <T as ValidatorService>::get_sidechain_proposals(
+                                        &inner,
+                                        request,
+                                    )
                                     .await
                             };
                             Box::pin(fut)
@@ -681,11 +707,11 @@ pub mod validator_server {
                     };
                     Box::pin(fut)
                 }
-                "/validator.Validator/GetSidechains" => {
+                "/validator.v1.ValidatorService/GetSidechains" => {
                     #[allow(non_camel_case_types)]
-                    struct GetSidechainsSvc<T: Validator>(pub Arc<T>);
+                    struct GetSidechainsSvc<T: ValidatorService>(pub Arc<T>);
                     impl<
-                        T: Validator,
+                        T: ValidatorService,
                     > tonic::server::UnaryService<super::GetSidechainsRequest>
                     for GetSidechainsSvc<T> {
                         type Response = super::GetSidechainsResponse;
@@ -699,7 +725,8 @@ pub mod validator_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as Validator>::get_sidechains(&inner, request).await
+                                <T as ValidatorService>::get_sidechains(&inner, request)
+                                    .await
                             };
                             Box::pin(fut)
                         }
@@ -726,10 +753,12 @@ pub mod validator_server {
                     };
                     Box::pin(fut)
                 }
-                "/validator.Validator/GetCtip" => {
+                "/validator.v1.ValidatorService/GetCtip" => {
                     #[allow(non_camel_case_types)]
-                    struct GetCtipSvc<T: Validator>(pub Arc<T>);
-                    impl<T: Validator> tonic::server::UnaryService<super::GetCtipRequest>
+                    struct GetCtipSvc<T: ValidatorService>(pub Arc<T>);
+                    impl<
+                        T: ValidatorService,
+                    > tonic::server::UnaryService<super::GetCtipRequest>
                     for GetCtipSvc<T> {
                         type Response = super::GetCtipResponse;
                         type Future = BoxFuture<
@@ -742,7 +771,7 @@ pub mod validator_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as Validator>::get_ctip(&inner, request).await
+                                <T as ValidatorService>::get_ctip(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -769,11 +798,11 @@ pub mod validator_server {
                     };
                     Box::pin(fut)
                 }
-                "/validator.Validator/GetMainBlockHeight" => {
+                "/validator.v1.ValidatorService/GetMainBlockHeight" => {
                     #[allow(non_camel_case_types)]
-                    struct GetMainBlockHeightSvc<T: Validator>(pub Arc<T>);
+                    struct GetMainBlockHeightSvc<T: ValidatorService>(pub Arc<T>);
                     impl<
-                        T: Validator,
+                        T: ValidatorService,
                     > tonic::server::UnaryService<super::GetMainBlockHeightRequest>
                     for GetMainBlockHeightSvc<T> {
                         type Response = super::GetMainBlockHeightResponse;
@@ -787,7 +816,10 @@ pub mod validator_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as Validator>::get_main_block_height(&inner, request)
+                                <T as ValidatorService>::get_main_block_height(
+                                        &inner,
+                                        request,
+                                    )
                                     .await
                             };
                             Box::pin(fut)
@@ -815,11 +847,11 @@ pub mod validator_server {
                     };
                     Box::pin(fut)
                 }
-                "/validator.Validator/GetMainChainTip" => {
+                "/validator.v1.ValidatorService/GetMainChainTip" => {
                     #[allow(non_camel_case_types)]
-                    struct GetMainChainTipSvc<T: Validator>(pub Arc<T>);
+                    struct GetMainChainTipSvc<T: ValidatorService>(pub Arc<T>);
                     impl<
-                        T: Validator,
+                        T: ValidatorService,
                     > tonic::server::UnaryService<super::GetMainChainTipRequest>
                     for GetMainChainTipSvc<T> {
                         type Response = super::GetMainChainTipResponse;
@@ -833,7 +865,8 @@ pub mod validator_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as Validator>::get_main_chain_tip(&inner, request).await
+                                <T as ValidatorService>::get_main_chain_tip(&inner, request)
+                                    .await
                             };
                             Box::pin(fut)
                         }
@@ -878,7 +911,7 @@ pub mod validator_server {
             }
         }
     }
-    impl<T: Validator> Clone for ValidatorServer<T> {
+    impl<T: ValidatorService> Clone for ValidatorServiceServer<T> {
         fn clone(&self) -> Self {
             let inner = self.inner.clone();
             Self {
@@ -890,7 +923,7 @@ pub mod validator_server {
             }
         }
     }
-    impl<T: Validator> tonic::server::NamedService for ValidatorServer<T> {
-        const NAME: &'static str = "validator.Validator";
+    impl<T: ValidatorService> tonic::server::NamedService for ValidatorServiceServer<T> {
+        const NAME: &'static str = "validator.v1.ValidatorService";
     }
 }
