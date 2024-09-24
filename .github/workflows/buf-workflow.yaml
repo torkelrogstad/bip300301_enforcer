@@ -1,0 +1,20 @@
+name: Lint Protobuf files
+
+on:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # https://github.com/bufbuild/buf-action
+      # This actions builds, lints and format-checks the Protobuf definitions
+      - uses: bufbuild/buf-action@v1
+        with: 
+          # Don't have any credentials or org set up
+          push: false
+
+          # We'll care about breaking changes once we have something deemed stable
+          breaking: false 
