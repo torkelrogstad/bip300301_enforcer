@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::{
     proto::{
         self,
@@ -8,29 +10,33 @@ use crate::{
             BroadcastWithdrawalBundleRequest, BroadcastWithdrawalBundleResponse,
             CreateBmmCriticalDataTransactionRequest, CreateBmmCriticalDataTransactionResponse,
             CreateDepositTransactionRequest, CreateDepositTransactionResponse,
-            CreateNewAddressRequest, CreateNewAddressResponse, GenerateBlocksRequest,
-            GenerateBlocksResponse, GetBlockHeaderInfoRequest, GetBlockHeaderInfoResponse,
-            GetBlockInfoRequest, GetBlockInfoResponse, GetBmmHStarCommitmentRequest,
-            GetBmmHStarCommitmentResponse, GetChainInfoRequest, GetChainInfoResponse,
-            GetChainTipRequest, GetChainTipResponse, GetCoinbasePsbtRequest,
-            GetCoinbasePsbtResponse, GetCtipRequest, GetCtipResponse, GetSidechainProposalsRequest,
-            GetSidechainProposalsResponse, GetSidechainsRequest, GetSidechainsResponse,
-            GetTwoWayPegDataRequest, GetTwoWayPegDataResponse, Network, SubscribeEventsRequest,
-            SubscribeEventsResponse,
+            CreateNewAddressRequest, CreateNewAddressResponse, CreateSidechainProposalRequest,
+            CreateSidechainProposalResponse, GenerateBlocksRequest, GenerateBlocksResponse,
+            GetBlockHeaderInfoRequest, GetBlockHeaderInfoResponse, GetBlockInfoRequest,
+            GetBlockInfoResponse, GetBmmHStarCommitmentRequest, GetBmmHStarCommitmentResponse,
+            GetChainInfoRequest, GetChainInfoResponse, GetChainTipRequest, GetChainTipResponse,
+            GetCoinbasePsbtRequest, GetCoinbasePsbtResponse, GetCtipRequest, GetCtipResponse,
+            GetSidechainProposalsRequest, GetSidechainProposalsResponse, GetSidechainsRequest,
+            GetSidechainsResponse, GetTwoWayPegDataRequest, GetTwoWayPegDataResponse, Network,
+            SubscribeEventsRequest, SubscribeEventsResponse,
         },
     },
     types::SidechainNumber,
 };
 
 use async_broadcast::RecvError;
+use bdk::bitcoin::consensus::serde;
+use bdk::bitcoin::consensus::serde::ByteEncoder;
 use bip300301_messages::{
     bitcoin::{self, absolute::Height, hashes::Hash, Amount, BlockHash, Transaction, TxOut},
     CoinbaseMessage,
 };
+use bitcoin::consensus::Encodable;
 use futures::{stream::BoxStream, StreamExt, TryStreamExt as _};
 use miette::Result;
 use tonic::{Request, Response, Status};
 
+use crate::messages::CoinbaseBuilder;
 use crate::types;
 pub use crate::validator::Validator;
 
@@ -58,6 +64,73 @@ impl ValidatorService for Validator {
     ) -> Result<tonic::Response<BroadcastWithdrawalBundleResponse>, tonic::Status> {
         // FIXME: implement
         todo!()
+    }
+
+    async fn create_sidechain_proposal(
+        &self,
+        request: tonic::Request<CreateSidechainProposalRequest>,
+    ) -> Result<tonic::Response<CreateSidechainProposalResponse>, tonic::Status> {
+        let CreateSidechainProposalRequest {
+            sidechain_number,
+            version,
+            title,
+            description,
+            hash_1,
+            hash_2,
+        } = request.into_inner();
+
+        const hash_1_length: usize = 32;
+        const hash_2_length: usize = 20;
+
+        let hash_1: Vec<u8> = if hash_1.is_empty() {
+            vec![0u8; hash_1_length]
+        } else if hash_1.len() == hash_1_length {
+            hash_1
+        } else {
+            return Err(invalid_field_value::<CreateSidechainProposalRequest>(
+                "hash_1",
+                &format!("must be empty or {hash_1_length} bytes"),
+            ));
+        };
+
+        let hash_2: Vec<u8> = if hash_2.is_empty() {
+            vec![0u8; hash_2_length]
+        } else if hash_2.len() == hash_2_length {
+            hash_2
+        } else {
+            return Err(invalid_field_value::<CreateSidechainProposalRequest>(
+                "hash_2",
+                &format!("must be empty or {hash_2_length} bytes"),
+            ));
+        };
+
+        let mut data: Vec<u8> = vec![];
+        data.extend_from_slice(&[sidechain_number as u8]);
+        data.extend_from_slice(&[version as u8]);
+        data.extend_from_slice(title.as_bytes());
+        data.extend_from_slice(description.as_bytes());
+        data.extend_from_slice(&hash_1);
+        data.extend_from_slice(&hash_2);
+
+        let builder = CoinbaseBuilder::new()
+            .propose_sidechain(sidechain_number.try_into().unwrap(), &data)
+            .build();
+
+        let tx_out = builder.first().unwrap();
+
+        let mut buffer = Vec::new();
+        match tx_out.consensus_encode(&mut buffer) {
+            Ok(_) => (),
+            Err(e) => {
+                return Err(tonic::Status::internal(format!(
+                    "Error encoding tx_out: {}",
+                    e
+                )));
+            }
+        }
+
+        let resp = CreateSidechainProposalResponse { tx_out: buffer };
+        Ok(tonic::Response::new(resp))
     }
 
     async fn create_bmm_critical_data_transaction(
@@ -96,20 +169,27 @@ impl ValidatorService for Validator {
         &self,
         request: tonic::Request<GetBlockHeaderInfoRequest>,
     ) -> Result<tonic::Response<GetBlockHeaderInfoResponse>, tonic::Status> {
-        let GetBlockHeaderInfoRequest { block_hash } = request.into_inner();
-        let block_hash = block_hash
-            .ok_or_else(|| missing_field::<GetBlockHeaderInfoRequest>("block_hash"))?
-            .try_into()
-            .map_err(|block_hash| {
-                invalid_field_value::<GetBlockHeaderInfoRequest>(
-                    "block_hash",
-                    &hex::encode(block_hash),
-                )
-            })?;
-        let block_hash = BlockHash::from_byte_array(block_hash);
+        let GetBlockHeaderInfoRequest {
+            block_hash: block_hash_raw,
+        } = request.into_inner();
+
+        if block_hash_raw.is_empty() {
+            return Err(missing_field::<GetBlockHeaderInfoRequest>("block_hash"));
+        }
+
+        let block_hash = BlockHash::from_str(&block_hash_raw).map_err(|_| {
+            invalid_field_value::<GetBlockHeaderInfoRequest>("block_hash", &block_hash_raw)
+        })?;
+
+        tracing::trace!(
+            "getting block header info for block hash: {}",
+            block_hash.to_string(),
+        );
+
         let header_info = self
             .get_header_info(&block_hash)
             .map_err(|err| tonic::Status::from_error(Box::new(err)))?;
+
         let resp = GetBlockHeaderInfoResponse {
             header_info: Some(header_info.into()),
         };
@@ -121,16 +201,14 @@ impl ValidatorService for Validator {
         request: tonic::Request<GetBlockInfoRequest>,
     ) -> Result<tonic::Response<GetBlockInfoResponse>, tonic::Status> {
         let GetBlockInfoRequest {
-            block_hash,
+            block_hash: raw_block_hash,
             sidechain_id,
         } = request.into_inner();
-        let block_hash = block_hash
-            .ok_or_else(|| missing_field::<GetBlockInfoRequest>("block_hash"))?
-            .try_into()
-            .map_err(|block_hash| {
-                invalid_field_value::<GetBlockInfoRequest>("block_hash", &hex::encode(block_hash))
-            })?;
-        let block_hash = BlockHash::from_byte_array(block_hash);
+
+        let block_hash = BlockHash::from_str(&raw_block_hash).map_err(|err| {
+            invalid_field_value::<GetBlockInfoRequest>("block_hash", &err.to_string())
+        })?;
+
         let sidechain_id: SidechainNumber = {
             let sidechain_id: u32 =
                 sidechain_id.ok_or_else(|| missing_field::<GetBlockInfoRequest>("sidechain_id"))?;
@@ -161,19 +239,13 @@ impl ValidatorService for Validator {
         request: tonic::Request<GetBmmHStarCommitmentRequest>,
     ) -> Result<tonic::Response<GetBmmHStarCommitmentResponse>, tonic::Status> {
         let GetBmmHStarCommitmentRequest {
-            block_hash,
+            block_hash: raw_block_hash,
             sidechain_id,
         } = request.into_inner();
-        let block_hash = block_hash
-            .ok_or_else(|| missing_field::<GetBmmHStarCommitmentRequest>("block_hash"))?
-            .try_into()
-            .map_err(|block_hash| {
-                invalid_field_value::<GetBmmHStarCommitmentRequest>(
-                    "block_hash",
-                    &hex::encode(block_hash),
-                )
-            })?;
-        let block_hash = BlockHash::from_byte_array(block_hash);
+        let block_hash = BlockHash::from_str(&raw_block_hash).map_err(|err| {
+            invalid_field_value::<GetBmmHStarCommitmentRequest>("block_hash", &err.to_string())
+        })?;
+
         let sidechain_id: SidechainNumber = {
             let sidechain_id: u32 = sidechain_id
                 .ok_or_else(|| missing_field::<GetBmmHStarCommitmentRequest>("sidechain_id"))?;

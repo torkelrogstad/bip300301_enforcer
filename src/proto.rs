@@ -89,6 +89,8 @@ pub mod validator {
     tonic::include_proto!("cusf.validator.v1");
 
     use bip300301_messages::bitcoin::hashes::Hash as _;
+    use bitcoin::consensus::Encodable;
+    use hex::ToHex;
     use subscribe_events_response::event::{ConnectBlock, DisconnectBlock};
     #[allow(unused_imports)]
     pub use validator_service_server::{
@@ -309,11 +311,9 @@ pub mod validator {
 
     impl From<crate::types::HeaderInfo> for BlockHeaderInfo {
         fn from(header_info: crate::types::HeaderInfo) -> Self {
-            let block_hash = header_info.block_hash.to_byte_array().to_vec();
-            let prev_block_hash = header_info.prev_block_hash.to_byte_array().to_vec();
             Self {
-                block_hash,
-                prev_block_hash,
+                block_hash: header_info.block_hash.encode_hex(),
+                prev_block_hash: header_info.prev_block_hash.encode_hex(),
                 height: header_info.height,
                 work: header_info.work.into(),
             }

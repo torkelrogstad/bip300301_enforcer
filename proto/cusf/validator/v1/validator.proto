@@ -1,0 +1,325 @@
+/* CUSF mainchain validator service */
+
+syntax = "proto3";
+package cusf.validator.v1;
+
+import "google/protobuf/wrappers.proto";
+
+enum AddressType {
+  ADDRESS_TYPE_UNSPECIFIED = 0;
+  ADDRESS_TYPE_DEFAULT = 1;
+  ADDRESS_TYPE_BECH32 = 2;
+  ADDRESS_TYPE_LEGACY = 3;
+  ADDRESS_TYPE_P2SH_SEGWIT = 4;
+}
+
+message BlockHeaderInfo {
+  // Hex-encoded block hash
+  string block_hash = 1;
+
+  // Hex-encoded previous block hash
+  string prev_block_hash = 2;
+
+  uint32 height = 3;
+  // Total work as a uint256, little-endian
+  bytes work = 4;
+}
+
+enum Network {
+  NETWORK_UNSPECIFIED = 0;
+  NETWORK_UNKNOWN = 1;
+  NETWORK_MAINNET = 2;
+  NETWORK_REGTEST = 3;
+  NETWORK_SIGNET = 4;
+  NETWORK_TESTNET = 5;
+}
+
+message OutPoint {
+  bytes txid = 1;
+  uint32 vout = 2;
+}
+
+message Output {
+  bytes address = 2;
+  uint64 value_sats = 3;
+}
+
+message Deposit {
+  uint64 sequence_number = 1;
+  OutPoint outpoint = 2;
+  Output output = 3;
+}
+
+enum WithdrawalBundleEventType {
+  WITHDRAWAL_BUNDLE_EVENT_TYPE_UNSPECIFIED = 0;
+  WITHDRAWAL_BUNDLE_EVENT_TYPE_SUBMITTED = 1;
+  WITHDRAWAL_BUNDLE_EVENT_TYPE_FAILED = 2;
+  WITHDRAWAL_BUNDLE_EVENT_TYPE_SUCCEDED = 3;
+}
+
+message WithdrawalBundleEvent {
+  bytes m6id = 1;
+  WithdrawalBundleEventType withdrawal_bundle_event_type = 2;
+}
+
+// Specific to an individual sidechain slot
+message BlockInfo {
+  repeated Deposit deposits = 1;
+  repeated WithdrawalBundleEvent withdrawal_bundle_events = 2;
+  optional bytes bmm_commitment = 3;
+}
+
+service ValidatorService {
+  rpc BroadcastWithdrawalBundle(BroadcastWithdrawalBundleRequest)
+    returns (BroadcastWithdrawalBundleResponse);
+  rpc CreateBmmCriticalDataTransaction(CreateBmmCriticalDataTransactionRequest)
+    returns (CreateBmmCriticalDataTransactionResponse);
+  rpc CreateDepositTransaction(CreateDepositTransactionRequest)
+    returns (CreateDepositTransactionResponse);
+  rpc CreateNewAddress(CreateNewAddressRequest)
+    returns (CreateNewAddressResponse);
+
+  rpc CreateSidechainProposal(CreateSidechainProposalRequest)
+    returns (CreateSidechainProposalResponse);
+
+  // Regtest only
+  rpc GenerateBlocks(GenerateBlocksRequest)
+    returns (GenerateBlocksResponse);
+  
+  rpc GetBlockHeaderInfo(GetBlockHeaderInfoRequest)
+    returns (GetBlockHeaderInfoResponse);
+  rpc GetBlockInfo(GetBlockInfoRequest) returns (GetBlockInfoResponse);
+  rpc GetBmmHStarCommitment(GetBmmHStarCommitmentRequest)
+    returns (GetBmmHStarCommitmentResponse);
+  rpc GetChainInfo(GetChainInfoRequest) returns (GetChainInfoResponse);
+  rpc GetChainTip(GetChainTipRequest) returns (GetChainTipResponse);
+  rpc GetCoinbasePSBT(GetCoinbasePSBTRequest) returns (GetCoinbasePSBTResponse);
+  rpc GetCtip(GetCtipRequest) returns (GetCtipResponse);
+  rpc GetSidechainProposals(GetSidechainProposalsRequest)
+      returns (GetSidechainProposalsResponse);
+  rpc GetSidechains(GetSidechainsRequest) returns (GetSidechainsResponse);
+  rpc GetTwoWayPegData(GetTwoWayPegDataRequest)
+    returns (GetTwoWayPegDataResponse);
+  rpc SubscribeEvents(SubscribeEventsRequest)
+    returns (stream SubscribeEventsResponse);
+}
+
+message BroadcastWithdrawalBundleRequest {
+  google.protobuf.UInt32Value sidechain_id = 1;
+  google.protobuf.BytesValue transaction = 2;
+}
+message BroadcastWithdrawalBundleResponse {
+}
+
+message CreateBmmCriticalDataTransactionRequest {
+  google.protobuf.UInt32Value sidechain_id = 1;
+  google.protobuf.UInt64Value value_sats = 2;
+  google.protobuf.UInt32Value height = 3;
+  google.protobuf.BytesValue critical_hash = 4;
+  google.protobuf.BytesValue prev_bytes = 5;
+}
+message CreateBmmCriticalDataTransactionResponse {
+  bytes txid = 1;
+}
+
+message CreateDepositTransactionRequest {
+  uint32 sidechain_id = 1;
+  string address = 2;
+  uint64 value_sats = 3;
+  uint64 fee_sats = 4;
+}
+message CreateDepositTransactionResponse {
+  bytes txid = 1;
+}
+
+message CreateNewAddressRequest {
+  optional string label = 1;
+  AddressType address_type = 2;
+}
+message CreateNewAddressResponse {
+  string address = 1;
+}
+
+message GenerateBlocksRequest {
+  google.protobuf.UInt32Value blocks = 1;
+}
+message GenerateBlocksResponse {
+}
+
+message GetBlockHeaderInfoRequest {
+  // Hex-encoded block hash
+  string block_hash = 1;
+}
+
+message GetBlockHeaderInfoResponse {
+  BlockHeaderInfo header_info = 1;
+}
+
+message GetBlockInfoRequest {
+  // Hex-encoded block hash
+  string block_hash = 1;
+  google.protobuf.UInt32Value sidechain_id = 2;
+}
+message GetBlockInfoResponse {
+  BlockHeaderInfo header_info = 1;
+  BlockInfo block_info = 2;
+}
+
+message GetBmmHStarCommitmentRequest {
+  string block_hash = 1;
+  google.protobuf.UInt32Value sidechain_id = 2;
+}
+message GetBmmHStarCommitmentResponse {
+  message BlockNotFoundError {
+    bytes block_hash = 1;
+  }
+  message Commitment {
+    optional bytes commitment = 1;
+  }
+  oneof result {
+    BlockNotFoundError block_not_found = 1;
+    Commitment commitment = 2;
+  }
+}
+
+message GetChainInfoRequest {
+}
+message GetChainInfoResponse {
+  Network network = 1;
+}
+
+message GetChainTipRequest {
+}
+message GetChainTipResponse {
+  BlockHeaderInfo block_header_info = 1;
+}
+
+message GetCoinbasePSBTRequest {
+  message ProposeSidechain {
+    google.protobuf.UInt32Value sidechain_number = 1;
+    google.protobuf.BytesValue data = 2;
+  }
+  message AckSidechain {
+    google.protobuf.UInt32Value sidechain_number = 1;
+    google.protobuf.BytesValue data_hash = 2;
+  }
+  message ProposeBundle {
+    google.protobuf.UInt32Value sidechain_number = 1;
+    google.protobuf.BytesValue bundle_txid = 2;
+  }
+  message AckBundles {
+    message RepeatPrevious {
+    }
+    message LeadingBy50 {
+    }
+    message Upvotes {
+      repeated uint32 upvotes = 1;
+    }
+    oneof ack_bundles {
+      RepeatPrevious repeat_previous = 1;
+      LeadingBy50 leading_by_50 = 2;
+      Upvotes upvotes = 3;
+    }
+  }
+
+  repeated ProposeSidechain propose_sidechains = 1;
+  repeated AckSidechain ack_sidechains = 2;
+  repeated ProposeBundle propose_bundles = 3;
+  AckBundles ack_bundles = 4;
+}
+message GetCoinbasePSBTResponse {
+  bytes psbt = 1;
+}
+
+message GetCtipRequest {
+  google.protobuf.UInt32Value sidechain_number = 1;
+}
+message GetCtipResponse {
+  message Ctip {
+    bytes txid = 1;
+    uint32 vout = 2;
+    uint64 value = 3;
+    uint64 sequence_number = 4;
+  }
+  optional Ctip ctip = 1;
+}
+
+message GetSidechainProposalsRequest {
+}
+message GetSidechainProposalsResponse {
+  message SidechainProposal {
+    uint32 sidechain_number = 1;
+    bytes data = 2;
+    bytes data_hash = 3;
+    uint32 vote_count = 4;
+    uint32 proposal_height = 5;
+    uint32 proposal_age = 6;
+  }
+  repeated SidechainProposal sidechain_proposals = 1;
+}
+
+message GetSidechainsRequest {
+}
+message GetSidechainsResponse {
+  message SidechainInfo {
+    uint32 sidechain_number = 1;
+    bytes data = 2;
+    uint32 vote_count = 3;
+    uint32 proposal_height = 4;
+    uint32 activation_height = 5;
+  }
+  repeated SidechainInfo sidechains = 1;
+}
+
+message GetTwoWayPegDataRequest {
+  google.protobuf.UInt32Value sidechain_id = 1;
+  optional bytes start_block_hash = 2;
+  google.protobuf.BytesValue end_block_hash = 3;
+}
+message GetTwoWayPegDataResponse {
+  message ResponseItem {
+    BlockHeaderInfo block_header_info = 1;
+    BlockInfo block_info = 2;
+  }
+  repeated ResponseItem blocks = 1;
+}
+
+message SubscribeEventsRequest {
+  google.protobuf.UInt32Value sidechain_id = 1;
+}
+message SubscribeEventsResponse {
+  message Event {
+    message ConnectBlock {
+      BlockHeaderInfo header_info = 1;
+      BlockInfo block_info = 2;
+    }
+    message DisconnectBlock {
+      bytes block_hash = 1;
+    }
+    oneof event {
+      ConnectBlock connect_block = 1;
+      DisconnectBlock disconnect_block = 2;
+    }
+  }
+  Event event = 1;
+}
+
+// Message: M1 
+// https://github.com/bitcoin/bips/blob/master/bip-0300.mediawiki#m1----propose-sidechain
+message CreateSidechainProposalRequest {
+  uint32 sidechain_number = 1;
+  uint32 version = 2;
+  string title = 3;
+  string description = 4;
+
+  // 32 byte hash
+  bytes hash_1 = 5;
+
+  // 20 byte hash
+  bytes hash_2 = 6;
+}
+
+message CreateSidechainProposalResponse {
+  // Raw serialized bitcoin transaction output that can be added to the coinbase. 
+  bytes tx_out = 1;
+}

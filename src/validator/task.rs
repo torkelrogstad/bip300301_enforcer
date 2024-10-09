@@ -213,6 +213,7 @@ fn handle_m1_propose_sidechain(
         //
         // Without this rule it would be possible for the miners to reset the vote count for
         // any sidechain proposal at any point.
+        tracing::debug!("sidechain proposal already exists");
         return Ok(());
     }
     let sidechain_proposal = SidechainProposal {
@@ -221,9 +222,12 @@ fn handle_m1_propose_sidechain(
         vote_count: 0,
         proposal_height,
     };
+
     let () = dbs
         .data_hash_to_sidechain_proposal
         .put(rwtxn, &data_hash, &sidechain_proposal)?;
+
+    tracing::info!("persisted new sidechain proposal: {sidechain_proposal:?}");
     Ok(())
 }
 
@@ -933,4 +937,43 @@ pub(super) async fn task(
         .map(Ok)
         .try_for_each(move |_: Instant| async move { task_loop_once(dbs, event_tx, main_client) })
         .await
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bip300301_messages::CoinbaseMessage;
+    use bitcoin::{
+        consensus::{encode::deserialize_hex, Decodable},
+        io::Cursor,
+    };
+    use serde::Deserialize;
+
+    #[test]
+    fn test_parse_m1_message() {
+        let hex_encoded = "020000000001010000000000000000000000000000000000000000000000000000000000000000ffffffff03023939feffffff0300f2052a01000000160014a46fddeaf98f1dd3efca296ad19fec5b067dab3a00000000000000005e6ad5e0c4af0a0a0154657374636861696e41207265616c6c792073696d706c652073696465636861696e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000986a24aa21a9ede2f61c3f71d1defd3fa999dfa36953755c690689799962b48bebd836974e8cf94c70ecc7daa2000247304402207084564296c763b6cfcaf3aeea421015559161d4ecc0feb5f9b6b3c85b8b67ae02207044d4b0650a8f3b63218ca17764d2eced822859809141aee2112ca8e3b5a2770121032b15624631d879829cf8d66b89965d264674b36d73682a69d739b9cf255b99500120000000000000000000000000000000000000000000000000000000000000000000000000";
+        let mut bytes = hex::decode(hex_encoded).expect("Decoding failed");
+        let transaction = Transaction::consensus_decode(&mut Cursor::new(&mut bytes))
+            .expect("Deserialization failed");
+
+        for output in &transaction.output {
+            let Ok((_, message)) = parse_coinbase_script(&output.script_pubkey) else {
+                continue;
+            };
+
+            match message {
+                CoinbaseMessage::M1ProposeSidechain {
+                    sidechain_number,
+                    data,
+                } => {
+                    assert_eq!(sidechain_number, 10);
+                    assert_eq!(data, vec![10, 10, 10]);
+
+                    return;
+                }
+                _ => panic!("Parsed message is not an M1ProposeSidechain"),
+            }
+        }
+
+        panic!("did not find M1ProposeSidechain");
+    }
 }

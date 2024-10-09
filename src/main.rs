@@ -1,13 +1,20 @@
-use std::{net::SocketAddr, path::Path, time::Duration};
-
 use clap::Parser;
 use futures::{future::TryFutureExt, FutureExt, StreamExt};
 use miette::{miette, IntoDiagnostic, Result};
+use std::{net::SocketAddr, path::Path, time::Duration};
 use tokio::{spawn, task::JoinHandle, time::interval};
 use tonic::transport::Server;
+use tonic::Request;
+use tonic::Status;
+use tower::ServiceBuilder;
+use tower_http::trace::DefaultOnFailure;
+use tower_http::trace::DefaultOnResponse;
+use tower_http::trace::TraceLayer;
+use tracing::Level;
 use tracing_subscriber::{filter as tracing_filter, layer::SubscriberExt};
 
 mod cli;
+mod messages;
 mod proto;
 mod rpc_client;
 mod server;
@@ -53,12 +60,27 @@ async fn run_server(validator: Validator, addr: SocketAddr) -> Result<()> {
         .into_diagnostic()?;
 
     tracing::info!("Listening for gRPC on {addr} with reflection");
+    let my_interceptor = ServiceBuilder::new()
+        .layer(
+            TraceLayer::new_for_grpc()
+                .on_response(DefaultOnResponse::new().level(Level::INFO))
+                .on_failure(DefaultOnFailure::new().level(Level::ERROR)),
+        )
+        .into_inner();
+
     Server::builder()
+        .layer(my_interceptor)
+        .timeout(Duration::from_secs(15))
+        // .layer(my_interceptor)
         .add_service(reflection_service)
         .add_service(ValidatorServiceServer::new(validator))
         .serve(addr)
         .map_err(|err| miette!("error in validator server: {err:#}"))
         .await
+}
+
+fn some_other_interceptor(request: Request<()>) -> Result<Request<()>, Status> {
+    Ok(request)
 }
 
 // TODO: return `Result<!, _>` once `never_type` is stabilized
@@ -114,4 +136,20 @@ async fn main() -> Result<()> {
         .map(|wallet| spawn(wallet_task(wallet).unwrap_or_else(|err| tracing::error!("{err:#}"))));
 
     run_server(validator, cli.serve_rpc_addr).await
+}
+
+#[derive(Debug, Clone, Default)]
+struct MyMiddlewareLayer {}
+
+impl<S> tower::Layer<S> for MyMiddlewareLayer {
+    type Service = MyMiddleware<S>;
+
+    fn layer(&self, service: S) -> Self::Service {
+        MyMiddleware { inner: service }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct MyMiddleware<S> {
+    inner: S,
 }
