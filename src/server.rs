@@ -348,7 +348,7 @@ impl ValidatorService for Validator {
             .map(|(data_hash, proposal)| SidechainProposal {
                 sidechain_number: u8::from(proposal.sidechain_number) as u32,
                 data: Some(proposal.data.clone()),
-                deserialized: proposal.try_deserialize().ok().map(|(_, deserialized)| {
+                deserialized: (&proposal).try_into().ok().map(|(_, deserialized)| {
                     DeserializedSidechain {
                         version: Some(deserialized_sidechain::Version::V0(
                             DeserializedSidechainV0 {
