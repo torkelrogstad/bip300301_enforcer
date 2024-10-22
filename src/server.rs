@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
 use crate::proto::mainchain::{
+    sidechain_declaration, CreateSidechainProposalRequest, CreateSidechainProposalResponse,
+};
+use crate::proto::mainchain::{
     wallet_service_server::WalletService, BroadcastWithdrawalBundleRequest,
     BroadcastWithdrawalBundleResponse, CreateBmmCriticalDataTransactionRequest,
     CreateBmmCriticalDataTransactionResponse, CreateDepositTransactionRequest,
@@ -26,12 +29,12 @@ use crate::{
     types::SidechainNumber,
 };
 
-use crate::messages::CoinbaseMessage;
+use crate::messages::{self, CoinbaseMessage};
 use async_broadcast::RecvError;
 use bdk::bitcoin::hashes::Hash as _;
 use bitcoin::{self, absolute::Height, Amount, BlockHash, Transaction, TxOut};
 use futures::{stream::BoxStream, StreamExt, TryStreamExt as _};
-use miette::{IntoDiagnostic, Result};
+use miette::{miette, IntoDiagnostic, Result};
 use tonic::{Request, Response, Status};
 
 use crate::types;
@@ -300,7 +303,7 @@ impl ValidatorService for Validator {
             // return Some, so we just unwrap it.
             let sequence_number = sequence_number.unwrap();
             let ctip = Ctip {
-                txid: Some(ConsensusHex::encode(&ctip.outpoint.txid)),
+                txid: Some(ReverseHex::encode(&ctip.outpoint.txid)),
                 vout: ctip.outpoint.vout,
                 value: ctip.value.to_sat(),
                 sequence_number,
@@ -527,6 +530,50 @@ impl ValidatorService for Validator {
 
 #[tonic::async_trait]
 impl WalletService for Arc<crate::wallet::Wallet> {
+    async fn create_sidechain_proposal(
+        &self,
+        request: tonic::Request<CreateSidechainProposalRequest>,
+    ) -> std::result::Result<tonic::Response<CreateSidechainProposalResponse>, tonic::Status> {
+        let CreateSidechainProposalRequest {
+            sidechain_id,
+            declaration,
+        } = request.into_inner();
+
+        let Some(declaration) = declaration.unwrap_or_default().version else {
+            return Err(tonic::Status::invalid_argument("declaration is required"));
+        };
+
+        let declaration = match declaration {
+            sidechain_declaration::Version::V0(v0) => v0,
+        };
+
+        let sidechain_id = sidechain_id.unwrap_or_default();
+
+        let title = declaration.title.unwrap_or_default();
+        let description = declaration.description.unwrap_or_default();
+
+        let sidechain_number = SidechainNumber(sidechain_id as u8);
+        let (proposal, data) = messages::create_sidechain_proposal(
+            sidechain_number,
+            title,
+            description,
+            vec![0u8; 32],
+            vec![0u8; 20],
+        )
+        .map_err(|err| err.into_status())?;
+
+        tracing::info!("Created sidechain proposal TX output: {:?}", proposal);
+
+        let () = self
+            .propose_sidechain(sidechain_number, &data)
+            .map_err(|err| err.into_status())?;
+
+        tracing::info!("Persisted sidechain proposal into DB",);
+
+        let response = CreateSidechainProposalResponse { txid: None };
+        Ok(tonic::Response::new(response))
+    }
+
     async fn create_new_address(
         &self,
         _request: tonic::Request<CreateNewAddressRequest>,
@@ -670,7 +717,7 @@ impl WalletService for Arc<crate::wallet::Wallet> {
         let txid = bdk_txid_to_bitcoin_txid(txid);
 
         let response = CreateBmmCriticalDataTransactionResponse {
-            txid: Some(ConsensusHex::encode(&txid)),
+            txid: Some(ReverseHex::encode(&txid)),
         };
         Ok(tonic::Response::new(response))
     }
