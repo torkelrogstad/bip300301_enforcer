@@ -1,22 +1,26 @@
 use std::sync::Arc;
 
-use crate::proto::mainchain::{
-    sidechain_declaration, CreateSidechainProposalRequest, CreateSidechainProposalResponse,
-};
-use crate::proto::mainchain::{
-    wallet_service_server::WalletService, BroadcastWithdrawalBundleRequest,
-    BroadcastWithdrawalBundleResponse, CreateBmmCriticalDataTransactionRequest,
-    CreateBmmCriticalDataTransactionResponse, CreateDepositTransactionRequest,
-    CreateDepositTransactionResponse, CreateNewAddressRequest, CreateNewAddressResponse,
-    GenerateBlocksRequest, GenerateBlocksResponse,
-};
+use async_broadcast::RecvError;
+use bdk::bitcoin::hashes::Hash as _;
+use bitcoin::{absolute::Height, Amount, BlockHash, Transaction, TxOut};
+use futures::{stream::BoxStream, StreamExt as _, TryStreamExt as _};
+use miette::IntoDiagnostic as _;
+use tonic::{Request, Response, Status};
+
 use crate::{
+    messages::{self, CoinbaseMessage},
     proto::{
         self,
         mainchain::{
             get_bmm_h_star_commitment_response, get_ctip_response::Ctip,
             get_sidechain_proposals_response::SidechainProposal,
-            get_sidechains_response::SidechainInfo, server::ValidatorService, ConsensusHex,
+            get_sidechains_response::SidechainInfo, server::ValidatorService,
+            wallet_service_server::WalletService, BroadcastWithdrawalBundleRequest,
+            BroadcastWithdrawalBundleResponse, ConsensusHex,
+            CreateBmmCriticalDataTransactionRequest, CreateBmmCriticalDataTransactionResponse,
+            CreateDepositTransactionRequest, CreateDepositTransactionResponse,
+            CreateNewAddressRequest, CreateNewAddressResponse, CreateSidechainProposalRequest,
+            CreateSidechainProposalResponse, GenerateBlocksRequest, GenerateBlocksResponse,
             GetBlockHeaderInfoRequest, GetBlockHeaderInfoResponse, GetBlockInfoRequest,
             GetBlockInfoResponse, GetBmmHStarCommitmentRequest, GetBmmHStarCommitmentResponse,
             GetChainInfoRequest, GetChainInfoResponse, GetChainTipRequest, GetChainTipResponse,
@@ -27,18 +31,8 @@ use crate::{
         },
     },
     types::SidechainNumber,
+    validator::Validator,
 };
-
-use crate::messages::{self, CoinbaseMessage};
-use async_broadcast::RecvError;
-use bdk::bitcoin::hashes::Hash as _;
-use bitcoin::{self, absolute::Height, Amount, BlockHash, Transaction, TxOut};
-use futures::{stream::BoxStream, StreamExt, TryStreamExt as _};
-use miette::{miette, IntoDiagnostic, Result};
-use tonic::{Request, Response, Status};
-
-use crate::types;
-pub use crate::validator::Validator;
 
 fn invalid_field_value<Message>(field_name: &str, value: &str) -> tonic::Status
 where
@@ -78,6 +72,13 @@ fn bdk_txid_to_bitcoin_txid(hash: bdk::bitcoin::Txid) -> bitcoin::Txid {
 
 trait IntoStatus {
     fn into_status(self) -> tonic::Status;
+}
+
+impl IntoStatus for proto::Error {
+    fn into_status(self) -> tonic::Status {
+        let err = anyhow::Error::from(self);
+        tonic::Status::invalid_argument(format!("{err:#}"))
+    }
 }
 
 // The idea here is to centralize conversion of lower layer errors into something meaningful
@@ -264,7 +265,7 @@ impl ValidatorService for Validator {
                     script_pubkey: message.try_into().into_diagnostic()?,
                 })
             })
-            .collect::<Result<Vec<_>>>()
+            .collect::<miette::Result<Vec<_>>>()
             .map_err(|err| tonic::Status::internal(err.to_string()))?;
         let transaction = Transaction {
             output,
@@ -375,7 +376,7 @@ impl ValidatorService for Validator {
         let sidechains = sidechains
             .into_iter()
             .map(|sidechain| {
-                let types::Sidechain {
+                let crate::types::Sidechain {
                     sidechain_number,
                     data,
                     vote_count,
@@ -533,39 +534,33 @@ impl WalletService for Arc<crate::wallet::Wallet> {
     async fn create_sidechain_proposal(
         &self,
         request: tonic::Request<CreateSidechainProposalRequest>,
-    ) -> std::result::Result<tonic::Response<CreateSidechainProposalResponse>, tonic::Status> {
+    ) -> Result<tonic::Response<CreateSidechainProposalResponse>, tonic::Status> {
         let CreateSidechainProposalRequest {
             sidechain_id,
             declaration,
         } = request.into_inner();
-
-        let Some(declaration) = declaration.unwrap_or_default().version else {
-            return Err(tonic::Status::invalid_argument("declaration is required"));
+        let sidechain_id = {
+            let raw_id = sidechain_id
+                .ok_or_else(|| missing_field::<CreateSidechainProposalRequest>("sidechain_id"))?;
+            SidechainNumber::try_from(raw_id).map_err(|_| {
+                invalid_field_value::<CreateSidechainProposalRequest>(
+                    "sidechain_id",
+                    &raw_id.to_string(),
+                )
+            })?
         };
-
-        let declaration = match declaration {
-            sidechain_declaration::Version::V0(v0) => v0,
-        };
-
-        let sidechain_id = sidechain_id.unwrap_or_default();
-
-        let title = declaration.title.unwrap_or_default();
-        let description = declaration.description.unwrap_or_default();
-
-        let sidechain_number = SidechainNumber(sidechain_id as u8);
-        let (proposal, data) = messages::create_sidechain_proposal(
-            sidechain_number,
-            title,
-            description,
-            vec![0u8; 32],
-            vec![0u8; 20],
-        )
-        .map_err(|err| err.into_status())?;
+        let declaration = declaration
+            .ok_or_else(|| missing_field::<CreateSidechainProposalRequest>("declaration"))?
+            .try_into()
+            .map_err(|err: proto::Error| err.into_status())?;
+        let (proposal, data) = messages::create_sidechain_proposal(sidechain_id, &declaration)
+            .into_diagnostic()
+            .map_err(|err| err.into_status())?;
 
         tracing::info!("Created sidechain proposal TX output: {:?}", proposal);
 
         let () = self
-            .propose_sidechain(sidechain_number, &data)
+            .propose_sidechain(sidechain_id, &data)
             .map_err(|err| err.into_status())?;
 
         tracing::info!("Persisted sidechain proposal into DB",);
@@ -603,7 +598,7 @@ impl WalletService for Arc<crate::wallet::Wallet> {
 
     async fn broadcast_withdrawal_bundle(
         &self,
-        request: tonic::Request<BroadcastWithdrawalBundleRequest>,
+        _request: tonic::Request<BroadcastWithdrawalBundleRequest>,
     ) -> std::result::Result<tonic::Response<BroadcastWithdrawalBundleResponse>, tonic::Status>
     {
         Err(tonic::Status::new(
