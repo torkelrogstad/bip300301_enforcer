@@ -41,12 +41,18 @@ use rusqlite::{Connection, Row};
 
 use crate::{
     cli::WalletConfig,
-    messages::{sha256d, CoinbaseBuilder, M8_BMM_REQUEST_TAG},
-    types::{SidechainNumber, SidechainProposal},
+    messages::{CoinbaseBuilder, M8_BMM_REQUEST_TAG},
+    types::{Sidechain, SidechainNumber, SidechainProposal},
     validator::Validator,
 };
 
 pub mod error;
+
+#[derive(Debug)]
+pub struct SidechainAck {
+    pub sidechain_number: u8,
+    pub description_hash: [u8; 32],
+}
 
 pub struct Wallet {
     main_client: HttpClient,
@@ -197,6 +203,10 @@ impl Wallet {
         Ok(wallet)
     }
 
+    pub fn validator(&self) -> &Validator {
+        &self.validator
+    }
+
     pub async fn generate_block(
         &self,
         coinbase_outputs: &[TxOut],
@@ -307,10 +317,7 @@ impl Wallet {
             let sidechain_proposals = self.get_sidechain_proposals()?;
             let mut coinbase_builder = CoinbaseBuilder::new();
             for sidechain_proposal in sidechain_proposals {
-                coinbase_builder = coinbase_builder.propose_sidechain(
-                    sidechain_proposal.sidechain_number.into(),
-                    sidechain_proposal.data.as_slice(),
-                );
+                coinbase_builder = coinbase_builder.propose_sidechain(sidechain_proposal);
             }
             let sidechain_acks = self.get_sidechain_acks()?;
             let pending_sidechain_proposals = self.get_pending_sidechain_proposals().await?;
@@ -318,11 +325,11 @@ impl Wallet {
                 if let Some(sidechain_proposal) =
                     pending_sidechain_proposals.get(&sidechain_ack.sidechain_number.into())
                 {
-                    let sidechain_proposal_data_hash = sha256d(&sidechain_proposal.data);
-                    if sidechain_proposal_data_hash == sidechain_ack.data_hash {
+                    let description_hash = sidechain_proposal.description.sha256d_hash();
+                    if description_hash == sidechain_ack.description_hash {
                         coinbase_builder = coinbase_builder.ack_sidechain(
                             sidechain_ack.sidechain_number,
-                            &sidechain_ack.data_hash,
+                            sidechain_ack.description_hash,
                         );
                     } else {
                         self.delete_sidechain_ack(&sidechain_ack)?;
@@ -514,13 +521,13 @@ impl Wallet {
         Ok(())
     }
 
-    pub fn propose_sidechain(&self, sidechain_number: SidechainNumber, data: &[u8]) -> Result<()> {
-        let sidechain_number: u8 = sidechain_number.into();
+    pub fn propose_sidechain(&self, proposal: &SidechainProposal) -> Result<()> {
+        let sidechain_number: u8 = proposal.sidechain_number.into();
         self.db_connection
             .lock()
             .execute(
                 "INSERT INTO sidechain_proposals (number, data) VALUES (?1, ?2)",
-                (sidechain_number, data),
+                (sidechain_number, &proposal.description.0),
             )
             .into_diagnostic()?;
         Ok(())
@@ -556,10 +563,10 @@ impl Wallet {
                 .into_diagnostic()?;
             let rows = statement
                 .query_map([], |row| {
-                    let data_hash: [u8; 32] = row.get(1)?;
+                    let description_hash: [u8; 32] = row.get(1)?;
                     Ok(SidechainAck {
                         sidechain_number: row.get(0)?,
-                        data_hash,
+                        description_hash,
                     })
                 })
                 .into_diagnostic()?
@@ -575,7 +582,7 @@ impl Wallet {
             .lock()
             .execute(
                 "DELETE FROM sidechain_acks WHERE number = ?1 AND data_hash = ?2",
-                (ack.sidechain_number, ack.data_hash),
+                (ack.sidechain_number, ack.description_hash),
             )
             .into_diagnostic()?;
         Ok(())
@@ -586,17 +593,15 @@ impl Wallet {
     ) -> Result<HashMap<SidechainNumber, SidechainProposal>> {
         let pending_proposals = self
             .validator
-            .get_sidechain_proposals()
+            .get_sidechains()
             .map_err(|e| miette::miette!(e.to_string()))?
             .into_iter()
-            .map(|(_, sidechain_proposal)| {
-                (sidechain_proposal.sidechain_number, sidechain_proposal)
-            })
+            .map(|(_, sidechain)| (sidechain.proposal.sidechain_number, sidechain.proposal))
             .collect();
         Ok(pending_proposals)
     }
 
-    pub fn get_sidechain_proposals(&self) -> Result<Vec<Sidechain>> {
+    pub fn get_sidechain_proposals(&self) -> Result<Vec<SidechainProposal>> {
         // Satisfy clippy with a single function call per lock
         let with_connection = |connection: &Connection| -> Result<_> {
             let mut statement = connection
@@ -606,9 +611,9 @@ impl Wallet {
                 .query_map([], |row| {
                     let data: Vec<u8> = row.get(1)?;
                     let sidechain_number: u8 = row.get::<_, u8>(0)?;
-                    Ok(Sidechain {
+                    Ok(SidechainProposal {
                         sidechain_number: sidechain_number.into(),
-                        data,
+                        description: data.into(),
                     })
                 })
                 .into_diagnostic()?
@@ -619,17 +624,8 @@ impl Wallet {
         with_connection(&self.db_connection.lock())
     }
 
-    pub async fn get_sidechains(&self) -> Result<Vec<Sidechain>> {
-        let sidechains = self
-            .validator
-            .get_sidechains()?
-            .into_iter()
-            .map(|sidechain| Sidechain {
-                sidechain_number: sidechain.sidechain_number,
-                data: sidechain.data,
-            })
-            .collect();
-        Ok(sidechains)
+    pub async fn get_active_sidechains(&self) -> Result<Vec<Sidechain>> {
+        self.validator.get_active_sidechains()
     }
 
     pub fn get_mainchain_tip(&self) -> Result<bitcoin::BlockHash> {
@@ -664,9 +660,9 @@ impl Wallet {
     }
 
     pub async fn is_sidechain_active(&self, sidechain_number: SidechainNumber) -> Result<bool> {
-        let sidechains = self.get_sidechains().await?;
+        let sidechains = self.get_active_sidechains().await?;
         for sidechain in sidechains {
-            if sidechain.sidechain_number == sidechain_number {
+            if sidechain.proposal.sidechain_number == sidechain_number {
                 return Ok(true);
             }
         }
@@ -843,12 +839,6 @@ type PendingTransactions = (
 
 type SidechainUTXOs = BTreeMap<u64, (cusf_sidechain_types::OutPoint, u32, u64, Option<u64>)>;
 
-#[derive(Debug)]
-pub struct Sidechain {
-    pub sidechain_number: SidechainNumber,
-    pub data: Vec<u8>,
-}
-
 fn get_block_value(height: u32, fees: Amount, network: Network) -> Amount {
     let subsidy_sats = 50 * Amount::ONE_BTC.to_sat();
     let subsidy_halving_interval = match network {
@@ -861,12 +851,6 @@ fn get_block_value(height: u32, fees: Amount, network: Network) -> Amount {
     } else {
         fees + Amount::from_sat(subsidy_sats >> halvings)
     }
-}
-
-#[derive(Debug)]
-pub struct SidechainAck {
-    pub sidechain_number: u8,
-    pub data_hash: [u8; 32],
 }
 
 #[derive(Debug)]
