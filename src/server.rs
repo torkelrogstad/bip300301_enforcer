@@ -2,7 +2,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use bdk::bitcoin::hashes::Hash as _;
 use bitcoin::{absolute::Height, Amount, BlockHash, Transaction, TxOut};
-use futures::{stream::BoxStream, StreamExt as _};
+use futures::{
+    stream::{BoxStream, FusedStream},
+    StreamExt as _,
+};
 use miette::IntoDiagnostic as _;
 use tonic::{Request, Response, Status};
 
@@ -516,6 +519,85 @@ impl ValidatorService for Validator {
     // }
 }
 
+/// Stream (non-)confirmations for a sidechain proposal
+fn stream_proposal_confirmations(
+    validator: &Validator,
+    sidechain_proposal: crate::types::SidechainProposal,
+) -> impl FusedStream<Item = Result<CreateSidechainProposalResponse, tonic::Status>> {
+    fn connect_block_event(
+        sidechain_proposal: &crate::types::SidechainProposal,
+        confirmations: &mut HashMap<BlockHash, (u32, Arc<bitcoin::OutPoint>)>,
+        header_info: crate::types::HeaderInfo,
+        block_info: crate::types::BlockInfo,
+    ) -> CreateSidechainProposalResponse {
+        let (confirms, outpoint) = {
+            if let Some(vout) =
+                block_info
+                    .sidechain_proposals
+                    .into_iter()
+                    .find_map(|(vout, proposal)| {
+                        if proposal == *sidechain_proposal {
+                            Some(vout)
+                        } else {
+                            None
+                        }
+                    })
+            {
+                let outpoint = bitcoin::OutPoint {
+                    txid: block_info.coinbase_txid,
+                    vout,
+                };
+                (1, Arc::new(outpoint))
+            } else if let Some((prev_confirms, outpoint)) =
+                confirmations.get(&header_info.prev_block_hash).cloned()
+            {
+                (prev_confirms, outpoint)
+            } else {
+                let notconfirmed = create_sidechain_proposal_response::NotConfirmed {
+                    block_hash: Some(ReverseHex::encode(&header_info.block_hash)),
+                    height: Some(header_info.height),
+                    prev_block_hash: Some(ReverseHex::encode(&header_info.prev_block_hash)),
+                };
+                let event = create_sidechain_proposal_response::Event::NotConfirmed(notconfirmed);
+                return CreateSidechainProposalResponse { event: Some(event) };
+            }
+        };
+        let confirmed = create_sidechain_proposal_response::Confirmed {
+            block_hash: Some(ReverseHex::encode(&header_info.block_hash)),
+            confirmations: Some(confirms),
+            height: Some(header_info.height),
+            outpoint: Some((*outpoint).into()),
+            prev_block_hash: Some(ReverseHex::encode(&header_info.prev_block_hash)),
+        };
+        confirmations.insert(header_info.block_hash, (confirms, outpoint));
+        let event = create_sidechain_proposal_response::Event::Confirmed(confirmed);
+        CreateSidechainProposalResponse { event: Some(event) }
+    }
+
+    let mut confirmations = HashMap::<BlockHash, (u32, Arc<bitcoin::OutPoint>)>::new();
+    validator.subscribe_events().filter_map(move |res| {
+        let resp = match res.into_diagnostic() {
+            Ok(event) => match event {
+                Event::ConnectBlock {
+                    header_info,
+                    block_info,
+                } => {
+                    let resp = connect_block_event(
+                        &sidechain_proposal,
+                        &mut confirmations,
+                        header_info,
+                        block_info,
+                    );
+                    Some(Ok(resp))
+                }
+                Event::DisconnectBlock { .. } => None,
+            },
+            Err(err) => Some(Err(err.into_status())),
+        };
+        futures::future::ready(resp)
+    })
+}
+
 #[tonic::async_trait]
 impl WalletService for Arc<crate::wallet::Wallet> {
     type CreateSidechainProposalStream =
@@ -558,75 +640,7 @@ impl WalletService for Arc<crate::wallet::Wallet> {
 
         tracing::info!("Persisted sidechain proposal into DB",);
 
-        let mut confirmations = HashMap::<BlockHash, (u32, Arc<bitcoin::OutPoint>)>::new();
-        let stream = self
-            .validator()
-            .subscribe_events()
-            .filter_map(move |res| {
-                let resp = match res.into_diagnostic() {
-                    Ok(event) => match event {
-                        Event::ConnectBlock {
-                            header_info,
-                            block_info,
-                        } => {
-                            if let Some(vout) = block_info.sidechain_proposals.into_iter().find_map(
-                                |(vout, proposal)| {
-                                    if proposal == sidechain_proposal {
-                                        Some(vout)
-                                    } else {
-                                        None
-                                    }
-                                },
-                            ) {
-                                let outpoint = bitcoin::OutPoint {
-                                    txid: block_info.coinbase_txid,
-                                    vout,
-                                };
-                                confirmations
-                                    .insert(header_info.block_hash, (1, Arc::new(outpoint)));
-                                let confirmed = create_sidechain_proposal_response::Confirmed {
-                                    block_hash: Some(ReverseHex::encode(&header_info.block_hash)),
-                                    confirmations: Some(1),
-                                    height: Some(header_info.height),
-                                    outpoint: Some(outpoint.into()),
-                                    prev_block_hash: Some(ReverseHex::encode(
-                                        &header_info.prev_block_hash,
-                                    )),
-                                };
-                                let event =
-                                    create_sidechain_proposal_response::Event::Confirmed(confirmed);
-                                let resp = CreateSidechainProposalResponse { event: Some(event) };
-                                Some(Ok(resp))
-                            } else if let Some((prev_confirms, outpoint)) =
-                                confirmations.get(&header_info.prev_block_hash).cloned()
-                            {
-                                let confirms = prev_confirms + 1;
-                                confirmations
-                                    .insert(header_info.block_hash, (confirms, outpoint.clone()));
-                                let confirmed = create_sidechain_proposal_response::Confirmed {
-                                    block_hash: Some(ReverseHex::encode(&header_info.block_hash)),
-                                    confirmations: Some(confirms),
-                                    height: Some(header_info.height),
-                                    outpoint: Some((*outpoint).into()),
-                                    prev_block_hash: Some(ReverseHex::encode(
-                                        &header_info.prev_block_hash,
-                                    )),
-                                };
-                                let event =
-                                    create_sidechain_proposal_response::Event::Confirmed(confirmed);
-                                let resp = CreateSidechainProposalResponse { event: Some(event) };
-                                Some(Ok(resp))
-                            } else {
-                                None
-                            }
-                        }
-                        Event::DisconnectBlock { .. } => None,
-                    },
-                    Err(err) => Some(Err(err.into_status())),
-                };
-                futures::future::ready(resp)
-            })
-            .boxed();
+        let stream = stream_proposal_confirmations(self.validator(), sidechain_proposal).boxed();
 
         Ok(tonic::Response::new(stream))
     }
@@ -714,7 +728,7 @@ impl WalletService for Arc<crate::wallet::Wallet> {
                 )
             })?;
 
-        match self.is_sidechain_active(sidechain_number).await {
+        match self.is_sidechain_active(sidechain_number) {
             Ok(false) => {
                 return Err(tonic::Status::failed_precondition(
                     "sidechain is not active",
@@ -760,7 +774,6 @@ impl WalletService for Arc<crate::wallet::Wallet> {
                 amount,
                 locktime,
             )
-            .await
             .map_err(|err| err.into_status())
             .inspect_err(|err| {
                 tracing::error!("Error creating BMM critical data transaction: {}", err);

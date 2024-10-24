@@ -22,11 +22,10 @@ use bip300301::{client::BlockchainInfo, jsonrpsee::http_client::HttpClient, Main
 use bitcoin::{
     absolute::{Height, LockTime},
     block::Version as BlockVersion,
-    consensus::Decodable as _,
-    consensus::Encodable as _,
+    consensus::{Decodable as _, Encodable as _},
     constants::{genesis_block, SUBSIDY_HALVING_INTERVAL},
     hash_types::TxMerkleNode,
-    hashes::Hash as _,
+    hashes::{sha256d, Hash as _},
     merkle_tree,
     opcodes::{
         all::{OP_PUSHBYTES_36, OP_RETURN},
@@ -42,17 +41,11 @@ use rusqlite::{Connection, Row};
 use crate::{
     cli::WalletConfig,
     messages::{CoinbaseBuilder, M8_BMM_REQUEST_TAG},
-    types::{Sidechain, SidechainNumber, SidechainProposal},
+    types::{SidechainAck, SidechainNumber, SidechainProposal},
     validator::Validator,
 };
 
 pub mod error;
-
-#[derive(Debug)]
-pub struct SidechainAck {
-    pub sidechain_number: u8,
-    pub description_hash: [u8; 32],
-}
 
 pub struct Wallet {
     main_client: HttpClient,
@@ -60,7 +53,7 @@ pub struct Wallet {
     bitcoin_wallet: Arc<Mutex<bdk::Wallet<SqliteDatabase>>>,
     db_connection: Arc<Mutex<rusqlite::Connection>>,
     bitcoin_blockchain: ElectrumBlockchain,
-    mnemonic: Mnemonic,
+    _mnemonic: Mnemonic,
     // seed
     // sidechain number
     // index
@@ -196,7 +189,7 @@ impl Wallet {
             bitcoin_wallet: Arc::new(Mutex::new(bitcoin_wallet)),
             db_connection: Arc::new(Mutex::new(db_connection)),
             bitcoin_blockchain,
-            mnemonic,
+            _mnemonic: mnemonic,
 
             last_sync: Arc::new(RwLock::new(None)),
         };
@@ -323,7 +316,7 @@ impl Wallet {
             let pending_sidechain_proposals = self.get_pending_sidechain_proposals().await?;
             for sidechain_ack in sidechain_acks {
                 if let Some(sidechain_proposal) =
-                    pending_sidechain_proposals.get(&sidechain_ack.sidechain_number.into())
+                    pending_sidechain_proposals.get(&sidechain_ack.sidechain_number)
                 {
                     let description_hash = sidechain_proposal.description.sha256d_hash();
                     if description_hash == sidechain_ack.description_hash {
@@ -565,8 +558,8 @@ impl Wallet {
                 .query_map([], |row| {
                     let description_hash: [u8; 32] = row.get(1)?;
                     Ok(SidechainAck {
-                        sidechain_number: row.get(0)?,
-                        description_hash,
+                        sidechain_number: SidechainNumber(row.get(0)?),
+                        description_hash: sha256d::Hash::from_byte_array(description_hash),
                     })
                 })
                 .into_diagnostic()?
@@ -582,7 +575,7 @@ impl Wallet {
             .lock()
             .execute(
                 "DELETE FROM sidechain_acks WHERE number = ?1 AND data_hash = ?2",
-                (ack.sidechain_number, ack.description_hash),
+                (ack.sidechain_number.0, ack.description_hash.as_byte_array()),
             )
             .into_diagnostic()?;
         Ok(())
@@ -624,10 +617,6 @@ impl Wallet {
         with_connection(&self.db_connection.lock())
     }
 
-    pub async fn get_active_sidechains(&self) -> Result<Vec<Sidechain>> {
-        self.validator.get_active_sidechains()
-    }
-
     pub fn get_mainchain_tip(&self) -> Result<bitcoin::BlockHash> {
         self.validator.get_mainchain_tip()
     }
@@ -659,8 +648,8 @@ impl Wallet {
         Ok(())
     }
 
-    pub async fn is_sidechain_active(&self, sidechain_number: SidechainNumber) -> Result<bool> {
-        let sidechains = self.get_active_sidechains().await?;
+    pub fn is_sidechain_active(&self, sidechain_number: SidechainNumber) -> Result<bool> {
+        let sidechains = self.validator.get_active_sidechains()?;
         for sidechain in sidechains {
             if sidechain.proposal.sidechain_number == sidechain_number {
                 return Ok(true);
@@ -671,7 +660,7 @@ impl Wallet {
 
     // Creates a BMM request transaction. Does NOT broadcast. `height` is the block height this
     // transaction MUST be included in. `amount` is the amount to spend in the BMM bid.
-    pub async fn create_bmm_request(
+    pub fn create_bmm_request(
         &self,
         sidechain_number: SidechainNumber,
         sidechain_block_hash: bdk::bitcoin::BlockHash,

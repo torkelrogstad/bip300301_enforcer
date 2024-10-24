@@ -2,7 +2,7 @@ use std::{future::Future, path::Path, sync::Arc};
 
 use async_broadcast::{broadcast, InactiveReceiver};
 use bip300301::{jsonrpsee, MainClient};
-use bitcoin::{self, BlockHash};
+use bitcoin::{self, hashes::sha256d, BlockHash};
 use fallible_iterator::FallibleIterator;
 use futures::{stream::FusedStream, FutureExt as _, StreamExt, TryFutureExt as _};
 use miette::{Diagnostic, IntoDiagnostic};
@@ -10,8 +10,7 @@ use thiserror::Error;
 use tokio::task::{spawn, JoinHandle};
 
 use crate::types::{
-    BlockInfo, BmmCommitments, Ctip, Event, Hash256, HeaderInfo, Sidechain, SidechainNumber,
-    TwoWayPegData,
+    BlockInfo, BmmCommitments, Ctip, Event, HeaderInfo, Sidechain, SidechainNumber, TwoWayPegData,
 };
 
 mod dbs;
@@ -135,7 +134,7 @@ impl Validator {
     }
 
     /// Get (possibly unactivated) sidechains
-    pub fn get_sidechains(&self) -> Result<Vec<(Hash256, Sidechain)>, miette::Report> {
+    pub fn get_sidechains(&self) -> Result<Vec<(sha256d::Hash, Sidechain)>, miette::Report> {
         let rotxn = self.dbs.read_txn().into_diagnostic()?;
         let res = self
             .dbs

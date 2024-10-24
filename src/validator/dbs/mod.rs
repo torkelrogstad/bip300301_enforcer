@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use bitcoin::hashes::sha256d;
 use heed::{types::SerdeBincode, EnvOpenOptions, RoTxn};
 use thiserror::Error;
 
@@ -69,7 +70,8 @@ pub(super) struct Dbs {
     pub block_hashes: BlockHashDbs,
     /// Tip that the enforcer is synced to
     pub current_chain_tip: Database<SerdeBincode<UnitKey>, SerdeBincode<bitcoin::BlockHash>>,
-    pub description_hash_to_sidechain: Database<SerdeBincode<Hash256>, SerdeBincode<Sidechain>>,
+    pub description_hash_to_sidechain:
+        Database<SerdeBincode<sha256d::Hash>, SerdeBincode<Sidechain>>,
     pub _leading_by_50: Database<SerdeBincode<UnitKey>, SerdeBincode<Vec<Hash256>>>,
     pub _previous_votes: Database<SerdeBincode<UnitKey>, SerdeBincode<Vec<Hash256>>>,
 }

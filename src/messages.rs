@@ -1,5 +1,5 @@
 use bitcoin::{
-    hashes::Hash,
+    hashes::{sha256d, Hash},
     opcodes::{
         all::{OP_NOP5, OP_PUSHBYTES_1, OP_RETURN},
         OP_TRUE,
@@ -53,10 +53,14 @@ impl CoinbaseBuilder {
         self
     }
 
-    pub fn ack_sidechain(mut self, sidechain_number: u8, description_hash: [u8; 32]) -> Self {
+    pub fn ack_sidechain(
+        mut self,
+        sidechain_number: SidechainNumber,
+        description_hash: sha256d::Hash,
+    ) -> Self {
         let message = CoinbaseMessage::M2AckSidechain {
-            sidechain_number,
-            data_hash: description_hash,
+            sidechain_number: sidechain_number.0,
+            data_hash: description_hash.to_byte_array(),
         };
         self.messages.push(message);
         self

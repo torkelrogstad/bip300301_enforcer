@@ -1,7 +1,9 @@
 use std::num::TryFromIntError;
 
-use bitcoin::{hashes::Hash as _, Amount, BlockHash, OutPoint, TxOut, Txid, Work};
-use borsh::BorshSerialize;
+use bitcoin::{
+    hashes::{sha256d, Hash as _},
+    Amount, BlockHash, OutPoint, TxOut, Txid, Work,
+};
 use derive_more::derive::Display;
 use hashlink::LinkedHashMap;
 use miette::Diagnostic;
@@ -12,9 +14,7 @@ use thiserror::Error;
 
 pub type Hash256 = [u8; 32];
 
-#[derive(
-    BorshSerialize, Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
-)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[repr(transparent)]
 #[serde(transparent)]
 pub struct SidechainNumber(pub u8);
@@ -49,16 +49,15 @@ pub struct Ctip {
     pub value: Amount,
 }
 
-#[derive(BorshSerialize, Clone, Debug, Deserialize, Display, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Display, Eq, PartialEq, Serialize)]
 #[display("{}", hex::encode(_0))]
 #[repr(transparent)]
 #[serde(transparent)]
 pub struct SidechainDescription(pub Vec<u8>);
 
 impl SidechainDescription {
-    pub fn sha256d_hash(&self) -> [u8; 32] {
-        let bytes = borsh::to_vec(self).unwrap();
-        bitcoin::hashes::sha256d::Hash::hash(&bytes).to_byte_array()
+    pub fn sha256d_hash(&self) -> bitcoin::hashes::sha256d::Hash {
+        bitcoin::hashes::sha256d::Hash::hash(&self.0)
     }
 }
 
@@ -68,13 +67,22 @@ impl From<Vec<u8>> for SidechainDescription {
     }
 }
 
+impl bitcoin::consensus::Encodable for SidechainDescription {
+    fn consensus_encode<W: bitcoin::io::Write + ?Sized>(
+        &self,
+        writer: &mut W,
+    ) -> Result<usize, bitcoin::io::Error> {
+        self.0.consensus_encode(writer)
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum DeserializeSidechainProposalError {
     #[error("Missing sidechain number")]
     MissingSidechainNumber,
 }
 
-#[derive(BorshSerialize, Clone, Debug, Deserialize, Display, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Display, Eq, PartialEq, Serialize)]
 #[display(
     "{{ sidechain_number: {}, description: {description} }}",
     sidechain_number.0
@@ -225,6 +233,12 @@ impl TryFrom<&SidechainDescription> for SidechainDeclaration {
         assert!(input.is_empty(), "somehow ended up with trailing bytes");
         Ok(sidechain_declaration)
     }
+}
+
+#[derive(Debug)]
+pub struct SidechainAck {
+    pub sidechain_number: SidechainNumber,
+    pub description_hash: sha256d::Hash,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

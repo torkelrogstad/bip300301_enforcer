@@ -13,8 +13,10 @@ use bip300301::{
     jsonrpsee, MainClient,
 };
 use bitcoin::{
-    self, hashes::Hash as _, opcodes::all::OP_RETURN, Amount, Block, BlockHash, OutPoint,
-    Transaction, TxOut, Work,
+    self,
+    hashes::{sha256d, Hash as _},
+    opcodes::all::OP_RETURN,
+    Amount, Block, BlockHash, OutPoint, Transaction, TxOut, Work,
 };
 use either::Either;
 use fallible_iterator::FallibleIterator;
@@ -25,8 +27,8 @@ use thiserror::Error;
 
 use crate::{
     types::{
-        BlockInfo, BmmCommitments, Ctip, Deposit, Event, Hash256, HeaderInfo, PendingM6id,
-        Sidechain, SidechainNumber, SidechainProposal, TreasuryUtxo, WithdrawalBundleEvent,
+        BlockInfo, BmmCommitments, Ctip, Deposit, Event, HeaderInfo, PendingM6id, Sidechain,
+        SidechainNumber, SidechainProposal, TreasuryUtxo, WithdrawalBundleEvent,
         WithdrawalBundleEventKind,
     },
     zmq::SequenceMessage,
@@ -205,7 +207,7 @@ fn handle_m1_propose_sidechain(
     proposal: SidechainProposal,
     proposal_height: u32,
 ) -> Result<Option<Sidechain>, HandleM1ProposeSidechainError> {
-    let description_hash: Hash256 = proposal.description.sha256d_hash();
+    let description_hash: sha256d::Hash = proposal.description.sha256d_hash();
     // FIXME: check that the proposal was made in an ancestor block
     if dbs
         .description_hash_to_sidechain
@@ -244,11 +246,11 @@ fn handle_m2_ack_sidechain(
     dbs: &Dbs,
     height: u32,
     sidechain_number: SidechainNumber,
-    description_hash: [u8; 32],
+    description_hash: &sha256d::Hash,
 ) -> Result<(), HandleM2AckSidechainError> {
     let sidechain = dbs
         .description_hash_to_sidechain
-        .try_get(rwtxn, &description_hash)?;
+        .try_get(rwtxn, description_hash)?;
     let Some(mut sidechain) = sidechain else {
         return Ok(());
     };
@@ -257,7 +259,7 @@ fn handle_m2_ack_sidechain(
     }
     sidechain.status.vote_count += 1;
     dbs.description_hash_to_sidechain
-        .put(rwtxn, &description_hash, &sidechain)?;
+        .put(rwtxn, description_hash, &sidechain)?;
 
     let sidechain_proposal_age = height - sidechain.status.proposal_height;
 
@@ -288,7 +290,7 @@ fn handle_m2_ack_sidechain(
             .sidechain
             .put(rwtxn, &sidechain_number, &sidechain)?;
         dbs.description_hash_to_sidechain
-            .delete(rwtxn, &description_hash)?;
+            .delete(rwtxn, description_hash)?;
     }
     Ok(())
 }
@@ -686,7 +688,7 @@ fn connect_block(
                     dbs,
                     height,
                     sidechain_number.into(),
-                    description_hash,
+                    &sha256d::Hash::from_byte_array(description_hash),
                 )?;
             }
             CoinbaseMessage::M3ProposeBundle {

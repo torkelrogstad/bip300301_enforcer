@@ -18,7 +18,6 @@ bdk = { version = "0.29.0", features = ["all-keys", "sqlite"] }
 bincode = "1.3.3"
 bitcoin = "0.32.3"
 blake3 = "1.5.4"
-borsh = { version = "1.5.1", features = ["derive"] }
 byteorder = "1.5.0"
 clap = { version = "4.5.18", features = ["derive"] }
 cusf_sidechain_types = { git = "https://github.com/LayerTwo-Labs/cusf_sidechain_types" }
